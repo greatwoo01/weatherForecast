@@ -1,6 +1,6 @@
 // 和风天气API配置
-const API_KEY = 'b4bdd56a82ff43aca425a1a442852cb6'; // 请替换为你的和风天气API密钥
-const GEO_API_URL = 'https://ny2vhdbctv.re.qweatherapi.com/geo/v2/city/lookup';
+const API_KEY = 'your_API_code'; // 请替换为你的和风天气API密钥
+const GEO_API_URL = 'https://your_api_host/geo/v2/city/lookup';
 let CITY_ID = '';
 
 // 获取设备位置并转换为城市ID
@@ -41,7 +41,7 @@ async function fetchWeatherData() {
         if (!CITY_ID) {
             await getLocationAndCityId();
         }
-        const API_URL = `https://ny2vhdbctv.re.qweatherapi.com/v7/weather/now?location=${CITY_ID}&key=${API_KEY}`;
+        const API_URL = `https://your_api_host/v7/weather/now?location=${CITY_ID}&key=${API_KEY}`;
         const response = await fetch(API_URL);
         const data = await response.json();
         
