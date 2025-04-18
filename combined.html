@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实时天气预报</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .datetime {
+            text-align: center;
+            margin: 30px 0;
+            font-size: 32px;
+            color: #2c3e50;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .location {
+            text-align: center;
+            margin: 10px 0;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .weather-info {
+            margin-top: 20px;
+        }
+        .weather-card {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .weather-icon {
+            width: 100px;
+            height: 100px;
+            margin-right: 15px;
+        }
+        .refresh-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .temperature-display {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #ff5722;
+        }
+
+        .refresh-options {
+            text-align: center;
+            margin: 20px auto;
+        }
+        .refresh-btn-option {
+            padding: 8px 16px;
+            margin: 0 5px;
+            background-color: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .refresh-btn-option.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .refresh-timer {
+            text-align: center;
+            margin: 20px auto;
+            font-size: 16px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>    
+    <div class="container">
+        <h1>实时天气预报</h1>
+        <div class="datetime" id="datetime">
+            <!-- 显示时间 -->
+        </div>
+        <div class="location" id="location">
+            <!-- 显示位置 -->
+        </div>
+        <table border="1">
+            <tr>
+                <td rowspan="2">
+                    <img id="weather-icon" class="weather-icon" src="https://a.hecdn.net/img/common/icon/202106d/100.png" alt="天气图标" style="width:50px;height:50px;">
+                    <p id="weather-text" class="weather-text"></p>
+                </td>
+                <td id="temp1" class="temp1">行1列2</td>
+            </tr>
+            <tr>
+                <!-- <td>行2列1</td> -->
+                <td id="humidity" class="humidity">行2列2</td>
+            </tr>
+            <tr>
+                <td id="windDir" class="windDir">行3列1</td>
+                <td id="windScale" class="windScale">行3列2</td>
+            </tr>
+        </table>
+        <div class="weather-info" id="weatherInfo">
+            <!-- 天气信息将在这里动态加载 -->
+        </div>
+        <div class="refresh-options">
+            <button class="refresh-btn-option active" data-interval="60">1分钟</button>
+            <button class="refresh-btn-option" data-interval="900">15分钟</button>
+            <button class="refresh-btn-option" data-interval="1800">30分钟</button>
+            <button class="refresh-btn-option" data-interval="3600">1小时</button>
+        </div>
+        <div class="refresh-timer" id="refreshTimer">
+            自动刷新倒计时: <span id="countdown">10</span>秒
+        </div>
+    </div>
+
+    <script>
+        // 和风天气API配置
+        const API_KEY = 'b4bdd56a82ff43aca425a1a442852cb6';
+        const GEO_API_URL = 'https://ny2vhdbctv.re.qweatherapi.com/geo/v2/city/lookup';
+        const WEATHER_API_URL = 'https://ny2vhdbctv.re.qweatherapi.com/v7/weather/now';
+        
+        let CITY_ID = '';
+
+        // 获取设备位置并转换为城市ID
+        async function getLocationAndCityId() {
+            return new Promise((resolve, reject) => {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        async (position) => {
+                            try {
+                                const { latitude, longitude } = position.coords;
+                                const geoResponse = await fetch(`${GEO_API_URL}?location=${longitude},${latitude}&key=${API_KEY}`);
+                                console.log('geoResponse:', await geoResponse.clone().json());
+                                const geoData = await geoResponse.json();
+                                
+                                if (geoData.code === '200' && geoData.location.length > 0) {
+                                    CITY_ID = geoData.location[0].id;
+                                    window.CITY_NAME = geoData.location[0].name;
+                                    window.DISTRICT_NAME = geoData.location[0].adm2;
+                                    resolve(CITY_ID);
+                                } else {
+                                    reject(new Error('无法获取城市ID: ' + (geoData.message || '未知错误')));
+                                }
+                            } catch (error) {
+                                reject(error);
+                            }
+                        },
+                        (error) => {
+                            reject(error);
+                        }
+                    );
+                } else {
+                    reject(new Error('浏览器不支持地理位置功能'));
+                }
+            });
+        }
+
+        // 获取天气数据
+        window.fetchWeatherData = async function() {
+            try {
+                if (!CITY_ID) {
+                    await getLocationAndCityId();
+                }
+                const API_URL = `${WEATHER_API_URL}?location=${CITY_ID}&key=${API_KEY}`;
+                const response = await fetch(API_URL);
+                const data = await response.json();
+                
+                if(data.code === '200') {
+                    console.log('获取到的天气数据:', data);
+                    updateWeatherUI(data.now);
+                } else {
+                    console.error('获取天气数据失败:', data.message);
+                    document.getElementById('weatherInfo').innerHTML = 
+                        `<div class="weather-card">获取天气数据失败: ${data.message}</div>`;
+                }
+            } catch (error) {
+                console.error('获取天气数据时出错:', error);
+                document.getElementById('weatherInfo').innerHTML = 
+                    `<div class="weather-card">获取天气数据时出错: ${error.message}</div>`;
+            }
+        }
+
+        // 更新UI显示天气数据
+        function updateWeatherUI(weatherData) {
+            const weatherInfo = document.getElementById('weatherInfo');
+            document.getElementById('weather-text').textContent = weatherData.text;
+            document.getElementById('weather-icon').src = 'https://a.hecdn.net/img/common/icon/202106d/'+ weatherData.icon+ '.png';
+            document.getElementById('location').textContent = `${window.CITY_NAME || '未知城市'} · ${window.DISTRICT_NAME || '未知地区'}`;
+            document.getElementById('temp1').textContent = weatherData.temp+'°C';
+            document.getElementById('humidity').textContent = '湿度: '+weatherData.humidity+'%';
+            document.getElementById('windDir').textContent = '风向: '+weatherData.windDir;
+            document.getElementById('windScale').textContent = '风速: '+weatherData.windScale+'级';
+            // 这里可以根据需要更新更多的天气信息，比如温度、湿度、风速等
+            // 简单示例：显示当前天气
+            weatherInfo.innerHTML = `
+                <div class="weather-card">
+                    <img src="https://a.hecdn.net/img/common/icon/202106d/${weatherData.icon}.png" 
+                         alt="天气图标" class="weather-icon">
+                    <div>
+                        <h2>${weatherData.text}</h2>
+                        <p class="temperature-display">温度: ${weatherData.temp}°C</p>
+                        <p>体感温度: ${weatherData.feelsLike}°C</p>
+                        <p>湿度: ${weatherData.humidity}%</p>
+                        <p>风速: ${weatherData.windScale}级</p>
+                        <p>风向: ${weatherData.windDir}</p>
+                        <!-- <p>更新时间: ${weatherData.obsTime}</p>
+                        <p>空气质量: ${weatherData.aqi}</p>
+                        <p>空气质量等级: ${weatherData.pm2p5}</p>
+                        <p>空气质量描述: ${weatherData.pm2p5Desc}</p>
+                        <p>紫外线强度: ${weatherData.uvIndex}</p>
+                        <p>紫外线描述: ${weatherData.uvDesc}</p>-->
+                        
+                        
+                        
+                    </div>
+                </div>
+            `;
+        }
+
+        // 新增时间更新功能
+        function updateDateTime() {
+            const now = new Date();
+            const datetimeElement = document.getElementById('datetime');
+            datetimeElement.textContent = 
+                `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} 
+                ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        }
+
+        // 初始化事件监听
+        function initEventListeners() {
+            let refreshInterval = 60;
+            let countdown = refreshInterval;
+            let countdownInterval;
+            
+            function startCountdown() {
+                if (countdownInterval) clearInterval(countdownInterval);
+                
+                countdownInterval = setInterval(() => {
+                    countdown--;
+                    document.getElementById('countdown').textContent = countdown;
+                    if(countdown <= 0) {
+                        clearInterval(countdownInterval);
+                        fetchWeatherData();
+                        countdown = refreshInterval;
+                        document.getElementById('countdown').textContent = countdown;
+                        startCountdown();
+                    }
+                }, 1000);
+            }
+            
+            // 添加刷新间隔选项点击事件
+            document.querySelectorAll('.refresh-btn-option').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.refresh-btn-option').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    refreshInterval = parseInt(this.dataset.interval);
+                    countdown = refreshInterval;
+                    document.getElementById('countdown').textContent = countdown;
+                    startCountdown();
+                });
+            });
+            
+            startCountdown();
+            window.addEventListener('load', () => {
+                fetchWeatherData();
+                updateDateTime();
+                setInterval(updateDateTime, 1000);
+            });
+        }
+
+        // 在页面加载时初始化
+        initEventListeners();
+    </script>
+</body>
+</html>
